@@ -17,6 +17,14 @@ Snowflake s = new Snowflake(275)
 s.nextId()
 ```
 
+The default nodeid use the ip address's last 10bit.
+```java
+Snowflake s = new Snowflake()
+s.nextId()
+System.out.println(s);
+```
+
+
 Read the blog to understand more:
 
 - [Generating unique IDs in a distributed environment at high scale.](https://www.callicoder.com/distributed-unique-id-sequence-number-generator/)
