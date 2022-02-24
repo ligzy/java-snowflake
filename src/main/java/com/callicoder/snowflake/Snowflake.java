@@ -1,6 +1,8 @@
 package com.callicoder.snowflake;
 
+import java.net.InetAddress;
 import java.net.NetworkInterface;
+import java.net.UnknownHostException;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Enumeration;
@@ -92,26 +94,68 @@ public class Snowflake {
     }
 
     private long createNodeId() {
-        long nodeId;
-        try {
-            StringBuilder sb = new StringBuilder();
-            Enumeration<NetworkInterface> networkInterfaces = NetworkInterface.getNetworkInterfaces();
-            while (networkInterfaces.hasMoreElements()) {
-                NetworkInterface networkInterface = networkInterfaces.nextElement();
-                byte[] mac = networkInterface.getHardwareAddress();
-                if (mac != null) {
-                    for(byte macPort: mac) {
-                        sb.append(String.format("%02X", macPort));
-                    }
-                }
-            }
-            nodeId = sb.toString().hashCode();
-        } catch (Exception ex) {
-            nodeId = (new SecureRandom().nextInt());
-        }
-        nodeId = nodeId & maxNodeId;
-        return nodeId;
-    }
+		long nodeId;
+		try {
+			byte[] arrayAddr = getLocalHostLANAddress().getAddress();
+			nodeId = (((arrayAddr[0] & 0xFF) << (3 * 8)) + ((arrayAddr[1] & 0xFF) << (2 * 8))
+					+ ((arrayAddr[2] & 0xFF) << (1 * 8)) + (arrayAddr[3] & 0xFF)) & 0xffffffffl;
+
+		} catch (Exception ex) {
+			nodeId = (new SecureRandom().nextInt());
+		}
+		nodeId = nodeId & maxNodeId;
+		return nodeId;
+	}
+
+	private InetAddress getLocalHostLANAddress() throws UnknownHostException {
+		try {
+			InetAddress candidateAddress = null;
+			// Iterate all NICs (network interface cards)...
+			for (Enumeration ifaces = NetworkInterface.getNetworkInterfaces(); ifaces.hasMoreElements();) {
+				NetworkInterface iface = (NetworkInterface) ifaces.nextElement();
+				// Iterate all IP addresses assigned to each card...
+				for (Enumeration inetAddrs = iface.getInetAddresses(); inetAddrs.hasMoreElements();) {
+					InetAddress inetAddr = (InetAddress) inetAddrs.nextElement();
+					if (!inetAddr.isLoopbackAddress()) {
+
+						if (inetAddr.isSiteLocalAddress()) {
+							// Found non-loopback site-local address. Return it immediately...
+							return inetAddr;
+						} else if (candidateAddress == null) {
+							// Found non-loopback address, but not necessarily site-local.
+							// Store it as a candidate to be returned if site-local address is not
+							// subsequently found...
+							candidateAddress = inetAddr;
+							// Note that we don't repeatedly assign non-loopback non-site-local addresses as
+							// candidates,
+							// only the first. For subsequent iterations, candidate will be non-null.
+						}
+					}
+				}
+			}
+			if (candidateAddress != null) {
+				// We did not find a site-local address, but we found some other non-loopback
+				// address.
+				// Server might have a non-site-local address assigned to its NIC (or it might
+				// be running
+				// IPv6 which deprecates the "site-local" concept).
+				// Return this non-loopback candidate address...
+				return candidateAddress;
+			}
+			// At this point, we did not find a non-loopback address.
+			// Fall back to returning whatever InetAddress.getLocalHost() returns...
+			InetAddress jdkSuppliedAddress = InetAddress.getLocalHost();
+			if (jdkSuppliedAddress == null) {
+				throw new UnknownHostException("The JDK InetAddress.getLocalHost() method unexpectedly returned null.");
+			}
+			return jdkSuppliedAddress;
+		} catch (Exception e) {
+			UnknownHostException unknownHostException = new UnknownHostException(
+					"Failed to determine LAN address: " + e);
+			unknownHostException.initCause(e);
+			throw unknownHostException;
+		}
+	}
 
     public long[] parse(long id) {
         long maskNodeId = ((1L << NODE_ID_BITS) - 1) << SEQUENCE_BITS;
