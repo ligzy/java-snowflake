@@ -1,4 +1,4 @@
-## Java distributed Unique ID generator inspired by Twitter snowflake
+## Java distributed Unique ID generator inspired by Twitter snowflake and auto create nodeid from ip.
 
 You can read about Twitter snowflake [here](https://blog.twitter.com/engineering/en_us/a/2010/announcing-snowflake.html).
 
